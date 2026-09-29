@@ -39,14 +39,27 @@ class ConsoleAPI:
         start = end - window
         result: dict[str, dict] = {}
         for name in names:
-            filled = self.platform.trend.fill_gaps(name)
+            self.platform.trend.fill_gaps(name)
             samples = self.platform.trend.window(name, start, end)
+            measured = [sample for sample in samples if not sample.filled]
+            filled = [sample for sample in samples if sample.filled]
             latest = self.platform.trend.latest(name)
+            latest_measured = self.platform.trend.latest_measured(name)
             result[name] = {
-                "filled_points": filled,
                 "samples": [sample.as_dict() for sample in samples],
-                "average": round(self.platform.trend.average(name, start, end), 4),
+                "segments": self.platform.trend.segments(name, start, end),
+                "measured_points": len(measured),
+                "filled_points": len(filled),
+                # 判定口径：只用实测点；展示口径（含补齐）单独给出，避免
+                # 报表读数被补齐值带偏。
+                "average": round(
+                    self.platform.trend.average(name, start, end), 4
+                ),
+                "average_including_filled": round(
+                    self.platform.trend.average(name, start, end, include_filled=True), 4
+                ),
                 "latest": latest.as_dict() if latest else None,
+                "latest_measured": latest_measured.as_dict() if latest_measured else None,
             }
         return {"window_s": window, "start": round(start, 3), "end": round(end, 3), "series": result}
 

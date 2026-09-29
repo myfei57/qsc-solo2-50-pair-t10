@@ -35,6 +35,37 @@ pre { font-size: 12px; background: #0f0d0a; padding: 10px; border-radius: 6px; o
 """
 
 _SCRIPT = """
+const SOURCE_LABEL = {measured: '实测', filled: '补齐'};
+function fmtTs(ts) {
+  return new Date(ts * 1000).toISOString().slice(11, 19);
+}
+function renderTrend(series) {
+  const names = Object.keys(series).sort();
+  if (!names.length) { return '窗口内暂无采样'; }
+  return names.map((name) => {
+    const item = series[name];
+    const segText = item.segments.map((seg) => {
+      const tag = SOURCE_LABEL[seg.source] || seg.source;
+      return `  [${tag}] ${fmtTs(seg.start)} ~ ${fmtTs(seg.end)}  ${seg.points} 点`;
+    }).join('\\n');
+    const lines = item.samples.map((s) => {
+      const tag = (SOURCE_LABEL[s.source] || s.source).padEnd(2, '　');
+      const basis = s.basis_ts !== undefined ? `  依据实测@${fmtTs(s.basis_ts)}` : '';
+      return `${fmtTs(s.ts)}  ${tag}  ${s.value}${basis}`;
+    });
+    return [
+      `== ${name} ==`,
+      `实测 ${item.measured_points} 点 / 补齐 ${item.filled_points} 点`,
+      `均值（判定口径，仅实测）: ${item.average}` +
+        (item.filled_points ? `  |  含补齐展示口径: ${item.average_including_filled}` : ''),
+      '-- 分段 --',
+      segText || '  （无）',
+      '-- 逐点 --',
+      ...lines,
+      '',
+    ].join('\\n');
+  }).join('\\n');
+}
 async function refresh() {
   const status = await (await fetch('/api/status')).json();
   const alarms = await (await fetch('/api/alarms')).json();
@@ -42,7 +73,7 @@ async function refresh() {
   document.getElementById('out-status').textContent = JSON.stringify(status, null, 2);
   document.getElementById('out-alarms').textContent =
     alarms.count + ' 条告警\\n' + JSON.stringify(alarms.alarms.slice(-8), null, 2);
-  document.getElementById('out-trend').textContent = JSON.stringify(trend.series, null, 2);
+  document.getElementById('out-trend').textContent = renderTrend(trend.series);
 }
 async function act(path, payload) {
   const init = {method: 'POST', headers: {'Content-Type': 'application/json'}};
@@ -87,7 +118,8 @@ def _sections(page: str) -> str:
         "<button onclick=\"act('/api/step', {dt: 1.0})\">推进周期</button>"
         "<pre id='out-action'>等待操作</pre></section>"
         "<section><h2>实时状态</h2><pre id='out-status'>加载中</pre></section>"
-        "<section><h2>趋势窗口（10 分钟）</h2><pre id='out-trend'>加载中</pre></section>"
+        "<section><h2>趋势窗口（10 分钟，实测／补齐分段标注；补齐点不参与判定均值）</h2>"
+        "<pre id='out-trend'>加载中</pre></section>"
         "<section><h2>告警</h2><pre id='out-alarms'>加载中</pre></section>"
     )
 
