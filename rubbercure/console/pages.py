@@ -39,10 +39,20 @@ async function refresh() {
   const status = await (await fetch('/api/status')).json();
   const alarms = await (await fetch('/api/alarms')).json();
   const trend = await (await fetch('/api/trend?window_s=600')).json();
+  const trendSummary = Object.fromEntries(
+    Object.entries(trend.series || {}).map(([name, item]) => [
+      name,
+      {sample_counts: item.sample_counts, segments: item.segments}
+    ])
+  );
   document.getElementById('out-status').textContent = JSON.stringify(status, null, 2);
   document.getElementById('out-alarms').textContent =
     alarms.count + ' 条告警\\n' + JSON.stringify(alarms.alarms.slice(-8), null, 2);
-  document.getElementById('out-trend').textContent = JSON.stringify(trend.series, null, 2);
+  document.getElementById('out-trend').textContent = JSON.stringify({
+    origins: trend.origins,
+    segments_summary: trendSummary,
+    series: trend.series
+  }, null, 2);
 }
 async function act(path, payload) {
   const init = {method: 'POST', headers: {'Content-Type': 'application/json'}};
@@ -87,7 +97,8 @@ def _sections(page: str) -> str:
         "<button onclick=\"act('/api/step', {dt: 1.0})\">推进周期</button>"
         "<pre id='out-action'>等待操作</pre></section>"
         "<section><h2>实时状态</h2><pre id='out-status'>加载中</pre></section>"
-        "<section><h2>趋势窗口（10 分钟）</h2><pre id='out-trend'>加载中</pre></section>"
+        "<section><h2>趋势窗口（10 分钟；source=measured 为实测，source=filled 为补齐）</h2>"
+        "<pre id='out-trend'>加载中</pre></section>"
         "<section><h2>告警</h2><pre id='out-alarms'>加载中</pre></section>"
     )
 

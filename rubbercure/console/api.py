@@ -39,16 +39,40 @@ class ConsoleAPI:
         start = end - window
         result: dict[str, dict] = {}
         for name in names:
-            filled = self.platform.trend.fill_gaps(name)
+            added_points = self.platform.trend.fill_gaps(name)
             samples = self.platform.trend.window(name, start, end)
+            measured_samples = self.platform.trend.window(
+                name, start, end, include_filled=False
+            )
             latest = self.platform.trend.latest(name)
+            latest_measured = self.platform.trend.latest_measured(name)
+            average = self.platform.trend.average(name, start, end)
             result[name] = {
-                "filled_points": filled,
+                "filled_points": added_points,
+                "sample_counts": {
+                    "total": len(samples),
+                    "measured": len(measured_samples),
+                    "filled": sum(1 for sample in samples if sample.filled),
+                },
+                "segments": self.platform.trend.origin_segments(name, start, end),
                 "samples": [sample.as_dict() for sample in samples],
-                "average": round(self.platform.trend.average(name, start, end), 4),
+                "average": round(average, 4) if average is not None else None,
+                "average_source": "measured" if average is not None else None,
                 "latest": latest.as_dict() if latest else None,
+                "latest_measured": (
+                    latest_measured.as_dict() if latest_measured else None
+                ),
             }
-        return {"window_s": window, "start": round(start, 3), "end": round(end, 3), "series": result}
+        return {
+            "window_s": window,
+            "start": round(start, 3),
+            "end": round(end, 3),
+            "origins": {
+                "measured": "现场实测点，可参与后续判定",
+                "filled": "按固定周期用前一个有效值补齐，仅用于连续展示，不参与后续判定",
+            },
+            "series": result,
+        }
 
     def alarms(self) -> dict:
         alarms = self.platform.audit.alarms()
